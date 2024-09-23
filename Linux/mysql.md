@@ -217,6 +217,35 @@ typedef struct MYSQL_RES {
 typedef char **MYSQL_ROW;		// 定义一个新的类型 MYSQL_ROW，它是一个指向字符串数组的指针
 ```
 
+```c
+/**
+ * @brief 描述 MySQL 查询结果集中每个字段的元数据，即列
+ */
+typedef struct MYSQL_FIELD {
+    char *name;               /* 字段名称 */
+    char *org_name;           /* 原始字段名称（如果是别名） */
+    char *table;              /* 字段所属的表名 */
+    char *org_table;          /* 原始表名（如果表是别名） */
+    char *db;                 /* 字段所在数据库 */
+    char *catalog;            /* 字段的目录 */
+    char *def;                /* 默认值（由 mysql_list_fields 设置） */
+    unsigned long length;     /* 字段创建时的宽度 */
+    unsigned long max_length; /* 选定集的最大宽度 */
+    unsigned int name_length; /* 字段名称的长度 */
+    unsigned int org_name_length; /* 原始名称的长度 */
+    unsigned int table_length; /* 表名的长度 */
+    unsigned int org_table_length; /* 原始表名的长度 */
+    unsigned int db_length;   /* 数据库名称的长度 */
+    unsigned int catalog_length; /* 目录名称的长度 */
+    unsigned int def_length;  /* 默认值的长度 */
+    unsigned int flags;       /* 字段的标志位 */
+    unsigned int decimals;    /* 字段的小数位数 */
+    unsigned int charsetnr;   /* 字符集编号 */
+    enum enum_field_types type; /* 字段类型（见 mysql_com.h 中的类型定义） */
+    void *extension;          /* 供扩展使用的指针 */
+} MYSQL_FIELD;
+```
+
 #### 常用函数
 
 ```c
@@ -227,5 +256,152 @@ typedef char **MYSQL_ROW;		// 定义一个新的类型 MYSQL_ROW，它是一个�
  * @return 返回指向初始化后的 MYSQL 对象的指针，如果失败则返回 NULL。
  */
 MYSQL *STDCALL mysql_init(MYSQL *mysql);
+```
+
+```c
+/**
+ * 连接到 MySQL 数据库。
+ *
+ * @param mysql 指向已初始化的 MYSQL 对象的指针。
+ * @param host 数据库主机的名称或 IP 地址。
+ * @param user 连接数据库的用户名。
+ * @param passwd 连接数据库的密码。
+ * @param db 要连接的数据库名称。
+ * @param port 数据库服务的端口号（通常为 3306），置0选择默认端口3306。
+ * @param unix_socket UNIX 套接字路径（如果适用）。
+ * @param clientflag 客户端连接标志（可选）。
+ * @return 如果连接成功，返回指向 MYSQL 对象的指针，即mysql；否则返回 NULL。
+ *
+ * 此函数用于建立与 MySQL 数据库的连接，在执行其他数据库操作前必须调用。
+ */
+MYSQL *STDCALL mysql_real_connect(MYSQL *mysql, const char *host,
+const char *user, const char *passwd,
+const char *db, unsigned int port,
+const char *unix_socket, unsigned long clientflag);
+```
+
+```c
+/**
+ * 执行一条 SQL 语句，可以写成字符串的任意 SQL 语句
+ *
+ * @param mysql 指向已连接的 MYSQL 对象的指针。
+ * @param q 要执行的 SQL 查询字符串。
+ * @return 如果查询成功，返回 0；如果出错，返回非零值。
+ *
+ * 此函数用于执行不返回结果集的 SQL 语句（如 INSERT、UPDATE、DELETE 等），或者准备好返回结果集的 SELECT 语句。
+ * 在执行 SELECT 查询后，应使用 mysql_store_result() 或 mysql_use_result() 获取结果集。
+ */
+int STDCALL mysql_query(MYSQL *mysql, const char *q);
+```
+
+```c
+/**
+ * @brief 获取最近一次操作所影响的行数。
+ *
+ * 此函数返回与最近一次执行的 INSERT、UPDATE 或 DELETE 操作相关的行数。
+ * 如果最近一次操作是 SELECT 查询，则返回值为 -1，表示没有受影响的行。
+ *
+ * @param mysql 指向 MYSQL 对象的指针，该对象必须是有效的且处于连接状态。
+ * @return 返回最近一次影响的行数
+ */
+uint64_t mysql_affected_rows(MYSQL *mysql);
+```
+
+```c
+/**
+ * @brief 从当前连接中存储所有查询结果。
+ *
+ * 此函数会将最近执行的查询结果完全存储在内存中。
+ * 适用于需要多次访问结果集的场景，支持随机访问
+ *
+ * @param mysql 指向 MYSQL 对象的指针，表示当前的数据库连接。
+ * @return 返回指向 MYSQL_RES 对象的指针，包含查询的结果集。
+ *         如果查询失败或没有结果，返回 NULL。
+ */
+MYSQL_RES *STDCALL mysql_store_result(MYSQL *mysql);
+
+/**
+ * @brief 使用流式方式获取查询结果。
+ *
+ * 此函数返回一个指向查询结果的指针，允许逐行处理结果集。
+ * 适用于处理大型结果集，避免占用过多内存，仅支持顺序访问
+ *
+ * @param mysql 指向 MYSQL 对象的指针，表示当前的数据库连接。
+ * @return 返回指向 MYSQL_RES 对象的指针，包含查询的结果集。
+ *         如果查询失败或没有结果，返回 NULL。
+ */
+MYSQL_RES *STDCALL mysql_use_result(MYSQL *mysql);
+```
+
+```c
+/**
+ * @brief 获取当前结果集中的字段数量，即结果集中的列数
+ *
+ * @param mysql 指向 MYSQL 对象的指针，该对象必须是有效的且处于连接状态。
+ * @return 返回当前结果集中的字段数量。如果没有结果集，返回 0。
+ */
+unsigned int mysql_field_count(MYSQL *mysql);
+
+/**
+ * @brief 获取结果集中的字段数量。
+ *
+ * @param res 指向 MYSQL_RES 对象的指针，该对象包含查询的结果集。
+ * @return 返回结果集中的字段数量。如果结果集为空，返回 0。
+ */
+unsigned int mysql_num_fields(MYSQL_RES *res);
+
+/**
+ * @brief 获取结果集的列名。
+ *
+ * 此函数返回一个指向 MYSQL_FIELD 结构体数组的指针，
+ * 该数组包含结果集中每个字段的元数据，例如名称、类型、大小等。
+ *
+ * @param res 指向 MYSQL_RES 对象的指针，该对象包含查询的结果集。
+ * @return 返回指向 MYSQL_FIELD 结构体数组的指针。如果结果集为空或查询失败，返回 NULL。
+ */
+MYSQL_FIELD *STDCALL mysql_fetch_fields(MYSQL_RES *res);
+```
+
+```c
+/**
+ * @brief 获取结果集中的行数。
+ *
+ * @param res 指向 MYSQL_RES 对象的指针，该对象包含查询的结果集。
+ * @return 返回结果集中的行数。如果结果集为空或查询失败，返回 0。
+ */
+uint64_t mysql_num_rows(MYSQL_RES *res);
+
+/**
+ * @brief 获取结果集中的下一行数据。
+ *
+ * 此函数返回查询结果集中的下一行数据，以 MYSQL_ROW 形式表示。
+ * 数据以数组的形式返回，每个元素对应结果集中的一列。
+ *
+ * @param result 指向 MYSQL_RES 对象的指针，该对象包含查询的结果集。
+ * @return 返回指向 MYSQL_ROW 的指针，包含当前行的数据。如果没有更多行可供返回，返回 NULL。
+ */
+MYSQL_ROW STDCALL mysql_fetch_row(MYSQL_RES *result);
+```
+
+```c
+/**
+ * @brief 释放结果集所占用的内存。
+ *
+ * 此函数用于释放由 mysql_store_result 或 mysql_use_result 分配的结果集内存。
+ * 在不再使用结果集后调用此函数，以防止内存泄漏。
+ *
+ * @param result 指向 MYSQL_RES 对象的指针，该对象表示查询的结果集。
+ */
+void STDCALL mysql_free_result(MYSQL_RES *result);
+
+/**
+ * @brief 关闭与 MySQL 服务器的连接。
+ *
+ * 此函数用于关闭一个已经打开的 MySQL 连接，并释放与之相关的资源。
+ * 在不再需要与数据库交互时调用此函数，以确保资源得到适当释放。
+ *
+ * @param sock 指向 MYSQL 对象的指针，该对象表示要关闭的数据库连接。
+ */
+void STDCALL mysql_close(MYSQL *sock);
 ```
 
