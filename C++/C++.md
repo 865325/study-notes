@@ -640,7 +640,6 @@ public:
 当类中有纯虚函数后，这个类也被称为抽象类
 
 抽象类无法被实例化，且子类必须重写抽象类中的纯虚函数，否则也属于抽象类
-
 ##### 虚析构和纯虚析构
 
 在多态使用时，如果子类有属性开辟到堆区，那么父类指针在释放时无法调用到子类的析构方法
@@ -651,14 +650,14 @@ public:
 
 #### 文件打开方式
 
-| 打开方式    | 解释                       |
-| ----------- | -------------------------- |
-| ios::in     | 读文件                     |
-| ios::out    | 写文件                     |
+| 打开方式        | 解释            |
+| ----------- | ------------- |
+| ios::in     | 读文件           |
+| ios::out    | 写文件           |
 | ios::ate    | 打开文件的初始位置：文件尾 |
-| ios::app    | 追加方式写文件             |
+| ios::app    | 追加方式写文件       |
 | ios::trunc  | 如果文件存在先删除，再创建 |
-| ios::binary | 以二进制方式打开文件       |
+| ios::binary | 以二进制方式打开文件    |
 
 #### 文本文件
 
@@ -716,7 +715,6 @@ void read()
 ```
 
 #### 二进制文件
-
 ##### 写文件
 
 ```c
@@ -750,5 +748,912 @@ void read()
     ifs.read((char *)&p, sizeof(p));
     cout << "姓名： " << p.m_Name << " 年龄： " << p.m_Age << endl;
 }
+```
+## 提高编程
+
+### 模板
+
+通用摸具，有助于提高复用性
+#### 函数模板
+
+C++有一种编程思想为泛型编程，主要用到的技术就是模板
+
+C++提供两种模板机制：函数模板
+
+```c++
+template<typename T>
+函数声明或定义
+```
+
+##### 普通函数和函数模板的调用规则
+
+-   如果函数模板和普通模板都可以实现，优先普通函数
+-   可以通过空模板参数列表来强制调用函数模板
+-   函数模板也可以发生重载
+-   如果函数模板可以更好匹配，优先函数模板
+
+##### 具体化模板
+
+```c++
+template<class T>
+void func(T a, T b)
+{
+	cout << "普通模板" <<endl;
+}
+
+template<> void func(int *a, int *b)
+{
+	cout << "具体化模板" << endl;
+}
+
+//具体化，显示具体化的原型和定意思以template<>开头，并通过名称来指出类型
+int main()
+{
+	// 函数模板
+	func(1, 2);
+	int a[5], b[5];
+	// 具体化模板
+	func(a, b);
+}
+```
+
+#### 类模板
+
+```c++
+// 类模板
+template <class NameType, class AgeType = int>
+class Person
+{
+public:
+	Person(NameType name, AgeType age)
+	{
+		this->mName = name;
+		this->mAge = age;
+	}
+	void showPerson() { cout << "name: " << this->mName << " age: " << this->mAge << endl; }
+
+public:
+	NameType mName;
+	AgeType mAge;
+};
+```
+
+与函数模板的区别：
+
+-   类模板没有自动类型推导的使用方式
+-   类模板在模板参数列表中可以有默认参数
+
+成员函数创建时机不同：
+
+-   普通类中的成员函数一开始就创建
+-   类模板中的成员函数在调用时才创建
+
+##### 类模板对象做函数参数
+
+一共三种传入方式
+
+-   指定传入的类型	   ——直接显示对象的数据类型
+-   参数模板化		   ——将对象中的参数变为模板进行传递
+-   整个类模板                   ——将这个对象类型模板化进行传递
+
+```c++
+//1、指定传入的类型
+void printPerson1(Person<string, int> &p);
+
+//2、参数模板化
+template <class T1, class T2>
+void printPerson2(Person<T1, T2>&p);
+
+//3、整个类模板化 
+template<class T>
+void printPerson3(T & p);
+```
+
+##### 类模板与继承
+
+-   当父类是一个类模板时，子类在声明时，要指定父类中T的类型
+-   如果不指定，编译器无法给子类分配内存
+-   如果想灵活指定父类中T的类型，子类也要变为类模板
+
+```c++
+template <class T>
+class Base
+{
+	T m;
+};
+
+// class Son:public Base //错误，c++编译需要给子类分配内存，必须知道父类中T的类型才可 以向下继承
+class Son : public Base<int> // 必须指定一个类型 
+{ };
+
+//类模板继承类模板 ,可以用T2指定父类中的T类型
+template<class T1, class T2>
+class Son2 :public Base<T2>
+{ };
+```
+
+##### 类模板成员函数类外实现
+
+类模板中成员函数类外实现时，需要加上模板参数列表
+
+```c++
+// 类模板中成员函数类外实现
+template <class T1, class T2>
+class Person
+{
+public:
+	// 成员函数类内声明
+	Person(T1 name, T2 age);
+	void showPerson();
+
+public:
+	T1 m_Name;
+	T2 m_Age;
+};
+
+// 构造函数 类外实现
+template <class T1, class T2>
+Person<T1, T2>::Person(T1 name, T2 age)
+{
+	this->m_Name = name;
+	this->m_Age = age;
+}
+```
+
+##### 类模板分文件编写
+
+类模板中成员函数的创建时机是在调用阶段，导致分文件编写时无法链接
+
+解决方法：
+
+-   直接包含 .cpp 源文件，而非 .h 文件
+-   将声明和实现写到同一个文件里，并更改后缀名为 .hpp，hpp是约定名称，非强制
+
+##### 类模板和友元函数
+
+全局函数类内实现 - 直接在类内声明友元即可
+
+全局函数类外实现 - 需要提前让编译器知道全局函数的存在，即提前声明
+
+### STL
+
+STL(Standard Template Library,标准模板库)，从广义上分为: 容器(container) 算法(algorithm) 迭代器(iterator)，容器和算法之间通过迭代器进行无缝连接
+
+#### 六大组件
+
+-   容器：各种数据结构，如vector、list、deque、set、map等,用来存放数据
+-   算法：各种常用的算法，如sort、find、copy、for_each等
+-   迭代器：扮演了容器与算法之间的胶合剂
+-   仿函数：行为类似函数，可作为算法的某种策略
+-   适配器：一种用来修饰容器或者仿函数或迭代器接口的东西
+-   空间配置器：负责空间的配置与管理
+
+#### 容器
+
+是将运用最广泛的一些数据结构实现出来，常用的数据结构：数组, 链表,树, 栈, 队列, 集合, 映射表 等
+
+这些容器分为序列式容器和关联式容器两种
+
+-   序列式容器:强调值的排序，序列式容器中的每个元素均有固定的位置
+-   关联式容器:二叉树结构，各元素之间没有严格的物理上的顺序关系
+
+#### 算法
+
+算法是使用有限的步骤，解决逻辑或数学上的问题
+
+算法分为质变算法和非质变算法
+
+-   质变算法：是指运算过程中会更改区间内的元素的内容。例如拷贝，替换，删除等等
+-   非质变算法：是指运算过程中不会更改区间内的元素内容，例如查找、计数、遍历、寻找极值等等
+
+#### 迭代器
+
+容器和算法之间粘合剂，提供一种方法，使之能够依序寻访某个容器所含的各个元素，而又无需暴露该容器的内部表示方式。每个容器都有自己专属的迭代器
+
+迭代器种类
+
+| 种类           | 功能                                   |
+| -------------- | -------------------------------------- |
+| 输入迭代器     | 对数据进行只读访问                     |
+| 输出迭代器     | 对数据进行只写访问                     |
+| 前向迭代器     | 读写操作，并能向前推进迭代器           |
+| 双向迭代器     | 读写操作，并能向前向后操作             |
+| 随机访问迭代器 | 读写操作，可以以跳跃的方式访问任意数据 |
+
+常用迭代器为双向迭代器和随机访问迭代器
+
+##### 使用方法
+
+```c++
+// 创建vector容器对象，并且通过模板参数指定容器中存放的数据的类型
+vector<int> v;
+// 向容器中放数据
+v.push_back(10);
+v.push_back(20);
+v.push_back(30);
+v.push_back(40);
+// 每一个容器都有自己的迭代器，迭代器是用来遍历容器中的元素
+// v.begin()返回迭代器，这个迭代器指向容器中第一个数据
+// v.end()返回迭代器，这个迭代器指向容器元素的最后一个元素的下一个位置
+// vector<int>::iterator 拿到vector<int>这种容器的迭代器类型
+vector<int>::iterator pBegin = v.begin();
+vector<int>::iterator pEnd = v.end();
+// 第一种遍历方式：
+while (pBegin != pEnd)
+{
+    cout << *pBegin << endl;
+    pBegin++;
+}
+// 第二种遍历方式：
+for (vector<int>::iterator it = v.begin(); it != v.end(); it++)
+{
+    cout << *it << endl;
+}
+cout << endl;
+// 第三种遍历方式：
+// 使用STL提供标准遍历算法 头文件 algorithm
+for_each(v.begin(), v.end(), MyPrint); // void MyPrint(int val);
+```
+
+#### string容器
+
+string是一个类，类内部封装了char\*，管理这个字符串，是一个char\*型的容器
+
+##### 构造函数
+
+```c++
+string();					//创建一个空的字符串 例如: string str;
+string(const char* s);		//使用字符串s初始化
+string(const string& str); 	//使用一个string对象初始化另一个string对象
+string(int n, char c); 		//使用n个字符c初始化
+```
+
+##### 赋值操作
+
+```c++
+string& operator=(const char* s); 		//char*类型字符串 赋值给当前的字符串
+string& operator=(const string &s);		//把字符串s赋给当前的字符串
+string& operator=(char c); 				//字符赋值给当前的字符串
+string& assign(const char *s); 			//把字符串s赋给当前的字符串
+string& assign(const char *s, int n); 	//把字符串s的前n个字符赋给当前的字符串
+string& assign(const string &s); 		//把字符串s赋给当前字符串
+string& assign(int n, char c); 			//用n个字符c赋给当前字符串
+```
+
+##### 字符串拼接
+
+```c++
+string& operator+=(const char* str); 	//重载+=操作符
+string& operator+=(const char c); 		//重载+=操作符
+string& operator+=(const string& str); 	//重载+=操作符
+string& append(const char *s); 			//把字符串s连接到当前字符串结尾
+string& append(const char *s, int n); 	//把字符串s的前n个字符连接到当前字符串结尾
+string& append(const string &s); 		//同operator+=(const string& str)
+string& append(const string &s, int pos, int n); //字符串s中从pos开始的n个字符连接到字符串结尾
+```
+
+##### 查找
+
+```c++
+int find(const string& str, int pos = 0) const; 	//查找str第一次出现位置,从pos开始查找。找不到返回 string::npos, 以下也一样
+int find(const char* s, int pos = 0) const; 		//查找s第一次出现位置,从pos开始查找
+int find(const char* s, int pos, int n) const; 		//从pos位置查找s的前n个字符第一次位置
+int find(const char c, int pos = 0) const; 			//查找字符c第一次出现位置
+int rfind(const string& str, int pos = npos) const; //查找str最后一次位置,从pos开始查找
+int rfind(const char* s, int pos = npos) const; 	//查找s最后一次出现位置,从pos开始查找
+int rfind(const char* s, int pos, int n) const; 	//从pos查找s的前n个字符最后一次位置
+int rfind(const char c, int pos = 0) const; 		//查找字符c最后一次出现位置
+```
+
+##### 替换
+
+```c++
+string& replace(int pos, int n, const string& str);	//替换从pos开始n个字符为字符串str
+string& replace(int pos, int n,const char* s); 		//替换从pos开始的n个字符为字符串s
+```
+
+##### 字符串比较
+
+```c++
+int compare(const string &s) const; //与字符串s比较, > 1, = 0, < -1
+int compare(const char *s) const; 	//与字符串s比较
+```
+
+##### 字符存取
+
+```c++
+char& operator[](int n); 	//通过[]方式取字符
+char& at(int n); 			//通过at方法获取字符
+```
+
+##### 插入和删除
+
+```c++
+string& insert(int pos, const char* s); 	//插入字符串
+string& insert(int pos, const string& str); //插入字符串
+string& insert(int pos, int n, char c); 	//在指定位置插入n个字符c
+string& erase(int pos, int n = npos); 		//删除从Pos开始的n个字符
+```
+
+##### 获取子串
+
+```c++
+string substr(int pos = 0, int n = npos) const;	//返回由pos开始的n个字符组成的字符串
+```
+
+#### vector容器
+
+vector数据结构和数组非常相似，也称为单端数组
+
+不同之处在于数组是静态空间，而vector可以动态扩展
+
+并不是在原空间之后续接新空间，而是找更大的内存空间，然后将原数据拷贝新空间，释放原空间
+
+vector容器的迭代器是支持随机访问的迭代器
+
+##### 构造函数
+
+```c++
+vector<T> v; 				//采用模板实现类实现，默认构造函数
+vector(v.begin(), v.end()); //将v[begin(), end())区间中的元素拷贝给本身
+vector(n, elem); 			//构造函数将n个elem拷贝给本身
+vector(const vector &vec); 	//拷贝构造函数
+```
+
+##### 赋值操作
+
+```c++
+vector& operator=(const vector &vec); 	//重载等号操作符
+assign(beg, end); 						//将[beg, end)区间中的数据拷贝赋值给本身
+assign(n, elem); 						//将n个elem拷贝赋值给本身
+```
+
+##### 容量和大小
+
+```c++
+empty(); 				//判断容器是否为空
+capacity(); 			//容器的容量
+size(); 				//返回容器中元素的个数
+resize(int num); 		//重新指定容器的长度为num，若容器变长，则以默认值填充新位置。如果容器变短，则末尾超出容器长度的元素被删除。
+resize(int num, elem); 	//重新指定容器的长度为num，若容器变长，则以elem值填充新位置。如果容器变短，则末尾超出容器长度的元素被删除
+```
+
+##### 插入和删除
+
+```c++
+push_back(ele); 									//尾部插入元素ele
+pop_back(); 										//删除最后一个元素
+insert(const_iterator pos, ele); 					//迭代器指向位置pos插入元素ele
+insert(const_iterator pos, int count,ele); 			//迭代器指向位置pos插入count个元素ele
+erase(const_iterator pos); 							//删除迭代器指向的元素
+erase(const_iterator start, const_iterator end); 	//删除迭代器从start到end之间的元素
+clear(); 											//删除容器中所有元素
+```
+
+##### 数据存取
+
+```c++
+at(int idx); 	//返回索引idx所指的数据
+operator[]; 	//返回索引idx所指的数据
+front(); 		//返回容器中第一个数据元素
+back(); 		//返回容器中最后一个数据元素
+```
+
+##### 互换容器
+
+```c++
+swap(vec); // 将vec与本身的元素互换，实现两个容器内元素进行互换
+
+// 收缩内存，即capacity=size
+// vector<int>(v)创建匿名对象，其值与v相等，但capacity=size
+// swap后，v的内存收缩
+vector<int>(v).swap(v);
+```
+
+##### 预留空间
+
+```c++
+reserve(int len); 	// 容器预留len个元素长度，预留位置不初始化，元素不可访问，减少扩充空间的时间花销
+```
+
+#### deque容器
+
+双端数组，可以对头端进行插入删除操作
+
+vector对于头部的插入删除效率低，数据量越大，效率越低
+
+deque相对而言，对头部的插入删除速度回比vector快
+
+vector访问元素时的速度会比deque快,这和两者内部实现有关
+
+##### 构造函数
+
+```c++
+deque<T> deqT; 				//默认构造形式
+deque(beg, end); 			//构造函数将[beg, end)区间中的元素拷贝给本身
+deque(n, elem); 			//构造函数将n个elem拷贝给本身
+deque(const deque &deq); 	//拷贝构造函数
+```
+
+##### 赋值操作
+
+```c++
+deque& operator=(const deque &deq); //重载等号操作符
+assign(beg, end); 					//将[beg, end)区间中的数据拷贝赋值给本身。
+assign(n, elem); 					//将n个elem拷贝赋值给本身
+```
+
+##### 容器大小操作
+
+```c++
+deque.empty(); 				//判断容器是否为空
+deque.size(); 				//返回容器中元素的个数
+deque.resize(num); 			//重新指定容器的长度为num,若容器变长，则以默认值填充新位置。如果容器变短，则末尾超出容器长度的元素被删除。
+deque.resize(num, elem); 	//重新指定容器的长度为num,若容器变长，则以elem值填充新位置。如果容器变短，则末尾超出容器长度的元素被删除。
+```
+
+##### 插入和删除
+
+```c++
+push_back(elem); 		//在容器尾部添加一个数据
+push_front(elem); 		//在容器头部插入一个数据
+pop_back(); 			//删除容器最后一个数据
+pop_front(); 			//删除容器第一个数据
+insert(pos,elem); 		//在pos位置插入一个elem元素的拷贝，返回新数据的位置
+insert(pos,n,elem); 	//在pos位置插入n个elem数据，无返回值
+insert(pos,beg,end);	//在pos位置插入[beg,end)区间的数据，无返回值
+clear(); 				//清空容器的所有数据
+erase(beg,end); 		//删除[beg,end)区间的数据，返回下一个数据的位置
+erase(pos); 			//删除pos位置的数据，返回下一个数据的位置
+```
+
+##### 数据存取
+
+```c++
+at(int idx); 	//返回索引idx所指的数据
+operator[]; 	//返回索引idx所指的数据
+front(); 		//返回容器中第一个数据元素
+back(); 		//返回容器中最后一个数据元素
+```
+
+#### stack容器
+
+stack是一种先进后出(First In Last Out,FILO)的数据结构，它只有一个出口
+
+栈中只有顶端的元素才可以被外界使用，因此栈不允许有遍历行为
+
+##### 构造函数
+
+```c++
+stack<T> stk; 				//stack采用模板类实现， stack对象的默认构造形式
+stack(const stack &stk); 	//拷贝构造函数
+```
+
+##### 赋值操作
+
+```c++
+stack& operator=(const stack &stk); //重载等号操作符
+```
+
+##### 数据存取
+
+```c++
+push(elem); 	//向栈顶添加元素
+pop(); 			//从栈顶移除第一个元素，无返回值
+top(); 			//返回栈顶元素
+```
+
+##### 大小操作
+
+```c++
+empty(); 		//判断堆栈是否为空
+size(); 		//返回栈的大小
+```
+
+#### queue 容器
+
+queue是一种先进先出(First In First Out,FIFO)的数据结构，它有两个出口
+
+队列容器允许从一端新增元素，从另一端移除元素
+
+队列中只有队头和队尾才可以被外界使用，因此队列不允许有遍历行为
+
+##### 构造函数
+
+```c++
+queue<T> que; 				//queue采用模板类实现，queue对象的默认构造形式
+queue(const queue &que); 	//拷贝构造函数
+```
+
+##### 赋值操作
+
+```c++
+queue& operator=(const queue &que); //重载等号操作符
+```
+
+##### 数据存取
+
+```c++
+push(elem); 	//往队尾添加元素
+pop(); 			//从队头移除第一个元素
+back(); 		//返回最后一个元素
+front(); 		//返回第一个元素
+```
+
+##### 大小操作
+
+```c++
+empty(); 		//判断队列是否为空
+size(); 		//返回队列的大小
+```
+
+#### list容器
+
+物理存储单元上非连续的存储结构，数据元素的逻辑顺序是通过链表中的指针链接实现的
+
+STL中的链表是一个双向循环链表
+
+List有一个重要的性质，插入操作和删除操作都不会造成原有list迭代器的失效，这在vector是不成立的
+
+##### 构造函数
+
+```c++
+list<T> lst; 			//list采用采用模板类实现,对象的默认构造形式
+list(beg,end); 			//构造函数将[beg, end)区间中的元素拷贝给本身
+list(n,elem); 			//构造函数将n个elem拷贝给本身
+list(const list &lst); 	//拷贝构造函数
+```
+
+##### 赋值和交换
+
+```c++
+assign(beg, end); 					//将[beg, end)区间中的数据拷贝赋值给本身。
+assign(n, elem); 					//将n个elem拷贝赋值给本身。
+list& operator=(const list &lst); 	//重载等号操作符
+swap(lst); 							//将lst与本身的元素互换
+```
+
+##### 大小操作
+
+```c++
+size(); 			//返回容器中元素的个数
+empty(); 			//判断容器是否为空
+resize(num); 		//重新指定容器的长度为num，若容器变长，则以默认值填充新位置。如果容器变短，则末尾超出容器长度的元素被删除
+resize(num, elem); 	//重新指定容器的长度为num，若容器变长，则以elem值填充新位置。
+```
+
+#####  插入和删除
+
+```c++
+push_back(elem);		//在容器尾部加入一个元素
+pop_back();				//删除容器中最后一个元素
+push_front(elem);		//在容器开头插入一个元素
+pop_front();			//从容器开头移除第一个元素
+insert(pos,elem);		//在pos位置插elem元素的拷贝，返回新数据的位置
+insert(pos,n,elem);		//在pos位置插入n个elem数据，无返回值
+insert(pos,beg,end);	//在pos位置插入[beg,end)区间的数据，无返回值
+clear();				//移除容器的所有数据
+erase(beg,end);			//删除[beg,end)区间的数据，返回下一个数据的位置
+erase(pos);				//删除pos位置的数据，返回下一个数据的位置
+remove(elem);			//删除容器中所有与elem值匹配的元素
+```
+
+##### 数据存取
+
+```c++
+front(); 	//返回第一个元素
+back(); 	//返回最后一个元素，不支持 at 和 []
+```
+
+##### 反转和排序
+
+```c++
+reverse(); 	//反转链表
+sort(); 	//链表排序，可以加入cmp
+
+L.sort([](int x, int y){
+    return x < y;
+});
+```
+
+#### set/ multiset 容器
+
+所有元素都会在插入时自动被排序
+
+set/multiset属于关联式容器，底层结构是用二叉树实现
+
+set不允许容器中有重复的元素 multiset允许容器中有重复的元素
+
+##### 构造和赋值
+
+```c++
+set<T> st; 						//默认构造函数：
+set(const set &st); 			//拷贝构造函数
+set& operator=(const set &st); 	//重载等号操作符
+```
+
+##### 大小和交换
+
+```c++
+size(); 	//返回容器中元素的数目
+empty(); 	//判断容器是否为空
+swap(st); 	//交换两个集合容器
+```
+
+##### 插入和删除
+
+```c++
+insert(elem); 		//在容器中插入元素。
+clear(); 			//清除所有元素
+erase(pos); 		//删除pos迭代器所指的元素，返回下一个元素的迭代器。
+erase(beg, end); 	//删除区间[beg,end)的所有元素 ，返回下一个元素的迭代器。
+erase(elem); 		//删除容器中值为elem的元素
+```
+
+##### 查找和统计
+
+```c++
+find(key); 	//查找key是否存在,若存在，返回该键的元素的迭代器；若不存在，返回set.end();
+count(key); //统计key的元素个数
+```
+
+##### set和multiset区别
+
+set不可以插入重复数据，而multiset可以
+
+set插入数据的同时会返回插入结果，表示插入是否成功
+
+multiset不会检测数据，因此可以插入重复数据
+
+##### 容器排序
+
+利用仿函数，可以改变排序规则
+
+对于自定义数据类型，set必须指定排序规则才可以插入数据
+
+```\
+class MyCompare
+{
+public:
+	bool operator()(int v1, int v2)
+	{
+		return v1 > v2;
+	} 
+};
+
+set<int, MyCompare> s;
+```
+
+#### map/ multimap容器
+
+map中所有元素都是pair
+
+pair中第一个元素为key（键值），起到索引作用，第二个元素为value（实值）
+
+所有元素都会根据元素的键值自动排序
+
+map/multimap属于关联式容器，底层结构是用二叉树实现
+
+##### 构造和赋值
+
+```c++
+map<T1, T2> mp; 				//map默认构造函数
+map(const map &mp); 			//拷贝构造函数
+map& operator=(const map &mp); 	//重载等号操作符
+```
+
+##### 大小和交换
+
+```c++
+size(); 	//返回容器中元素的数目
+empty(); 	//判断容器是否为空
+swap(st); 	//交换两个集合容器
+```
+
+##### 插入和删除
+
+```c++
+insert(elem); 		//在容器中插入元素
+clear(); 			//清除所有元素
+erase(pos); 		//删除pos迭代器所指的元素，返回下一个元素的迭代器
+erase(beg, end); 	//删除区间[beg,end)的所有元素 ，返回下一个元素的迭代器
+erase(key); 		//删除容器中值为key的元素
+```
+
+##### 查找和统计
+
+```c++
+find(key); 	//查找key是否存在,若存在，返回该键的元素的迭代器；若不存在，返回set.end();
+count(key); //统计key的元素个数
+```
+
+##### 容器排序
+
+map容器默认排序规则为 按照key值进行 从小到大排序
+
+利用仿函数，可以改变排序规则
+
+对于自定义数据类型，map必须要指定排序规则,同set容器
+
+### 函数对象
+
+#### 概念
+
+重载函数调用操作符的类，其对象常称为函数对象
+
+函数对象使用重载的()时，行为类似函数调用，也叫仿函数
+
+函数对象(仿函数)是一个类，不是一个函数
+
+使用方法：
+
+-   函数对象在使用时，可以像普通函数那样调用, 可以有参数，可以有返回值
+-   函数对象超出普通函数的概念，函数对象可以有自己的状态
+-   函数对象可以作为参数传递
+
+#### 谓词
+
+返回bool类型的仿函数称为谓词
+
+如果operator()接受一个参数，那么叫做一元谓词
+
+如果operator()接受两个参数，那么叫做二元谓词
+
+##### 内建函数对象
+
+STL内建了一些函数对象
+
+-   算术仿函数
+-   关系仿函数
+-   逻辑仿函数
+
+这些仿函数所产生的对象，用法和一般函数完全相同
+
+使用内建函数对象，需要引入头文件 #include \<functional>
+
+##### 算术仿函数
+
+```c++
+template<class T> T plus<T> 		//加法仿函数
+template<class T> T minus<T> 		//减法仿函数
+template<class T> T multiplies<T> 	//乘法仿函数
+template<class T> T divides<T> 		//除法仿函数
+template<class T> T modulus<T> 		//取模仿函数
+template<class T> T negate<T> 		//取反仿函数，一元运算
+   
+negate<int> n;
+cout << n(50) << endl;
+plus<int> p;
+cout << p(10, 20) << endl;
+```
+
+##### 关系仿函数
+
+实现关系对比
+
+```c++
+template<class T> bool equal_to<T> 			//等于
+template<class T> bool not_equal_to<T> 		//不等于
+template<class T> bool greater<T> 			//大于
+template<class T> bool greater_equal<T> 	//大于等于
+template<class T> bool less<T> 				//小于
+template<class T> bool less_equal<T> 		//小于等于
+    
+sort(v.begin(), v.end(), greater<int>());	//使用大于仿函数，进行排序
+```
+
+##### 逻辑仿函数
+
+实现逻辑运算
+
+```c++
+template<class T> bool logical_and<T> 	//逻辑与
+template<class T> bool logical_or<T> 	//逻辑或
+template<class T> bool logical_not<T> 	//逻辑非
+```
+
+#### 常用算法
+
+算法主要是由头文件\<algorithm>, \<functional>, \<numeric>组成
+
+-   \<algorithm> 是所有STL头文件中最大的一个，范围涉及到比较、 交换、查找、遍历操作、复制、 修改等等
+
+-   \<numeric> 体积很小，只包括几个在序列上面进行简单数学运算的模板函数
+-   \<functional> 定义了一些模板类,用以声明函数对象
+
+##### 常用遍历算法
+
+```c++
+for_each(iterator beg, iterator end, _func);	// 遍历容器元素，执行__func函数
+
+// beg1 源容器开始迭代器
+// end1 源容器结束迭代器
+// beg2 目标容器开始迭代器
+// _func 函数或者函数对象
+transform(iterator beg1, iterator end1, iterator beg2, _func);
+```
+
+##### 常用查找算法
+
+```c++
+// 按值查找元素，找到返回指定位置迭代器，找不到返回结束迭代器位置
+find(iterator beg, iterator end, value);
+
+// 按值查找元素，找到返回指定位置迭代器，找不到返回结束迭代器位置
+// _Pred 函数或者谓词（返回bool类型的仿函数）
+find_if(iterator beg, iterator end, _Pred);	
+
+// 查找相邻重复元素,返回相邻元素的第一个位置的迭代器
+adjacent_find(iterator beg, iterator end);
+
+// 查找指定的元素，查到 返回true 否则false。注意: 在无序序列中不可用
+bool binary_search(iterator beg, iterator end, value);
+
+// 统计元素出现次数
+count(iterator beg, iterator end, value);
+
+// 按条件统计元素出现次数
+count_if(iterator beg, iterator end, _Pred);
+```
+
+##### 常用排序算法
+
+```c++
+// 对容器内元素进行排序
+sort(iterator beg, iterator end, _Pred);
+
+// 指定范围内的元素随机调整次序
+random_shuffle(iterator beg, iterator end);
+
+// 容器元素合并，并存储到另一容器中
+// 注意: 两个容器必须是有序的
+merge(iterator beg1, iterator end1, iterator beg2, iterator end2, iterator
+dest);
+
+// 反转指定范围的元素
+reverse(iterator beg, iterator end);
+```
+
+##### 常用拷贝和替换算法
+
+```c++
+// 容器内指定范围的元素拷贝到另一容器中
+copy(iterator beg, iterator end, iterator dest);
+
+// 将容器内指定范围的旧元素修改为新元素
+replace(iterator beg, iterator end, oldvalue, newvalue);
+
+// 按条件替换元素，满足条件的替换成指定元素
+// _pred 谓词
+replace_if(iterator beg, iterator end, _pred, newvalue);
+
+// 互换两个容器的元素
+swap(container c1, container c2);
+```
+
+##### 常用算术生成算法
+
+使用时包含的头文件为 #include \<numeric>
+
+```c++
+// 计算容器元素累计总和
+accumulate(iterator beg, iterator end, value);
+
+// 向容器中填充指定的元素
+fill(iterator beg, iterator end, value);
+```
+
+##### 常用集合算法
+
+```c++
+// 求两个集合的交集
+// 注意:两个集合必须是有序序列
+set_intersection(iterator beg1, iterator end1, iterator beg2, iterator end2, iterator dest);
+
+// 求两个集合的并集
+set_union(iterator beg1, iterator end1, iterator beg2, iterator end2, iterator dest);
+
+// 求两个集合的差集
+set_difference(iterator beg1, iterator end1, iterator beg2, iterator end2, iterator dest);
 ```
 
