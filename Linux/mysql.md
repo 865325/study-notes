@@ -361,7 +361,14 @@ MYSQL *STDCALL mysql_init(MYSQL *mysql);
  *
  * 此函数用于建立与 MySQL 数据库的连接，在执行其他数据库操作前必须调用。
  */
+<<<<<<< HEAD
 MYSQL *STDCALL mysql_real_connect(MYSQL *mysql, const char *host, const char *user, const char *passwd, const char *db, unsigned int port, const char *unix_socket, unsigned long clientflag);
+=======
+MYSQL *STDCALL mysql_real_connect(MYSQL *mysql, const char *host,
+const char *user, const char *passwd,
+const char *db, unsigned int port,
+const char *unix_socket, unsigned long clientflag);
+>>>>>>> d1af7d29b72d9b1dc2869af4ffbb412f0bb97e32
 ```
 
 ```c
@@ -489,6 +496,7 @@ void STDCALL mysql_free_result(MYSQL_RES *result);
 void STDCALL mysql_close(MYSQL *sock);
 ```
 
+<<<<<<< HEAD
 ```c
 /**
  * @brief 初始化一个预处理语句句柄。
@@ -843,4 +851,3 @@ int main()
 	return 0;
 }
 ```
-
