@@ -183,7 +183,7 @@ decrby key decrement
 
 Redis hash 是一个 string 类型的 field（字段）和 value（值）的映射表，hash 特别适合用于存储对象
 
-Redis 中每个 hash 可以存储 232 - 1 键值对（40多亿）
+Redis 中每个 hash 可以存储 2^32 - 1 键值对（40多亿）
 
 ```bash
 # 将哈希表 key 中的字段 field 的值设为 value，如果 field 存在则覆盖。如果哈希表不存在，一个新的哈希表被创建并进行 HSET 操作
@@ -238,4 +238,129 @@ hincrby key field increment
 # 返回值：执行 hincrbyfloat 命令之后，哈希表中字段的值
 hincrbyfloat key field increment
 ```
+
+#### 列表（List）
+
+Redis列表是简单的字符串列表，按照插入顺序排序。你可以添加一个元素到列表的头部（左边）或者尾部（右边）
+
+一个列表最多可以包含 2^32 - 1 个元素（4294967295, 每个列表超过40亿个元素）
+
+```bash
+# 将一个或多个值依次插入到列表头部|尾部。如果 key 不存在，一个空列表会被创建并执行 LPUSH 操作
+# 返回值：执行命令后，列表的长度
+lpush|rpush key element [element...]
+
+# 将一个值或多个值依次插入到已存在的列表的头部|尾部，列表不存在时操作无效
+# 返回值：执行命令后，列表的长度。如果列表不存在，返回 0
+lpushx|rpushx key element [element...]
+
+# 获取列表指定范围内的元素，包括 start 和 end
+# 返回值：一个列表，包含指定区间内的元素
+lrange key start stop
+
+# 移出并获取列表的第一个|最后一个元素
+# 返回值：移出的元素。当列表 key 不存在时，返回 nil
+lpop|rpop key
+
+# 移出并获取列表的第一个|最后一个元素。如果key1 为空，则获取 key2 的元素，依次下去，直到所有列表没有元素时会阻塞列表，直到等待超时或发现可弹出元素为止
+# 返回值：如果列表为空，返回一个 nil。否则，返回一个含有两个元素的列表，第一个元素是被弹出元素所属的 key ，第二个元素是被弹出元素的值
+blpop|brpop key1 [key2] timeout
+
+# 移除列表 source 的最后一个元素，并将该元素添加到列表 destination 的头部并返回
+# 返回值：被弹出的元素
+rpoplpush source destination
+
+# 移除列表 source 的最后一个元素，并将该元素添加到列表 destination 的头部并返回。如果列表没有元素会阻塞列表直到等待超时或发现可弹出元素为止
+# 返回值：被弹出的元素，超时返回 nil
+brpoplpush source destination timeout
+
+# 在列表的元素 pivot 前或者后插入元素 value。当指定元素不存在于列表中时，不执行任何操作。当列表不存在时，被视为空列表，不执行任何操作
+# 如果命令执行成功，返回插入操作完成之后，列表的长度。如果没有找到指定元素，返回 -1。如果 key 不存在或为空列表，返回 0
+linsert key before|after pivot element
+
+# 根据参数 count 的值，移除列表中与参数 element 相等的元素
+# count > 0: 从表头开始向表尾搜索，移除与 element 相等的元素，数量为 count
+# count < 0: 从表尾开始向表头搜索，移除与 element 相等的元素，数量为 -count
+# count = 0: 移除所有与 element 相等的元素
+# 返回值：被移除元素的数量。列表不存在时返回 0
+lrem key count element
+
+# 对一个列表进行修剪，保留指定区间内的元素
+# 返回值：OK
+ltrim key start stop
+
+# 通过索引获取列表中的元素
+# 返回值：列表中下标为指定索引值的元素。如果指定索引值不在列表的区间范围内，返回 nil
+lindex key index
+
+# 通过索引设置列表元素的值
+# 返回值：成功返回OK。当索引参数超出范围，或对一个空列表进行 lset 时，返回一个错误
+lset key index element
+
+# 获取列表长度
+# 返回值：列表的长度
+llen key
+```
+
+#### 集合（Set）
+
+Redis 的 Set 是 String 类型的无序集合。集合成员是唯一的，这就意味着集合中不能出现重复的数据
+
+Redis 中集合是通过哈希表实现的，所以添加，删除，查找的复杂度都是 O(1)
+
+集合中最大的成员数为 232 - 1 (4294967295, 每个集合可存储40多亿个成员)
+
+集合对象的编码可以是 intset 或者 hashtable
+
+-   intset：仅用于存储整数值，且在元素数量较少时非常高效。当集合达到一定大小（超过512个元素）时，会自动转换为hashtable，以便提高操作性能
+-   hashtable：用于存储字符串或较大的集合，支持更多操作。内存占用相对较高，因为需要存储键值对的哈希表结构，包括指针和哈希桶
+
+```bash
+# 向集合添加一个或多个成员。
+sadd key member1 [member2]
+
+# 获取集合的成员数。
+scard key
+
+# 返回第一个集合与其他集合之间的差异。
+sdiff key1 [key2]
+
+# 返回给定所有集合的差集并存储在 destination 中。
+sdiffstore destination key1 [key2]
+
+# 返回给定所有集合的交集。
+sinter key1 [key2]
+
+# 返回给定所有集合的交集并存储在 destination 中。
+sinterstore destination key1 [key2]
+
+# 判断 member 元素是否是集合 key 的成员。
+sismember key member
+
+# 返回集合中的所有成员。
+smembers key
+
+# 将 member 元素从 source 集合移动到 destination 集合。
+smove source destination member
+
+# 移除并返回集合中的一个随机元素。
+spop key
+
+# 返回集合中一个或多个随机数。
+srandmember key [count]
+
+# 移除集合中一个或多个成员。
+srem key member1 [member2]
+
+# 返回所有给定集合的并集。
+sunion key1 [key2]
+
+# 所有给定集合的并集存储在 destination 集合中。
+sunionstore destination key1 [key2]
+
+# 迭代集合中的元素。
+sscan key cursor [match pattern] [count count]
+```
+
+
 
