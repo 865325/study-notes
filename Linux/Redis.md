@@ -308,7 +308,7 @@ Redis 的 Set 是 String 类型的无序集合。集合成员是唯一的，这�
 
 Redis 中集合是通过哈希表实现的，所以添加，删除，查找的复杂度都是 O(1)
 
-集合中最大的成员数为 232 - 1 (4294967295, 每个集合可存储40多亿个成员)
+集合中最大的成员数为 2^32 - 1 (4294967295, 每个集合可存储40多亿个成员)
 
 集合对象的编码可以是 intset 或者 hashtable
 
@@ -316,51 +316,154 @@ Redis 中集合是通过哈希表实现的，所以添加，删除，查找的�
 -   hashtable：用于存储字符串或较大的集合，支持更多操作。内存占用相对较高，因为需要存储键值对的哈希表结构，包括指针和哈希桶
 
 ```bash
-# 向集合添加一个或多个成员。
-sadd key member1 [member2]
+# 向集合添加一个或多个成员，已经存在于集合的成员元素将被忽略
+# 返回值：被添加到集合中的新元素的数量，不包括被忽略的元素
+sadd key member [member...]
 
-# 获取集合的成员数。
+# 获取集合中元素的数量
+# 返回值：集合中元素的数量。当集合 key 不存在时，返回 0
 scard key
 
-# 返回第一个集合与其他集合之间的差异。
-sdiff key1 [key2]
-
-# 返回给定所有集合的差集并存储在 destination 中。
-sdiffstore destination key1 [key2]
-
-# 返回给定所有集合的交集。
-sinter key1 [key2]
-
-# 返回给定所有集合的交集并存储在 destination 中。
-sinterstore destination key1 [key2]
-
-# 判断 member 元素是否是集合 key 的成员。
-sismember key member
-
-# 返回集合中的所有成员。
+# 返回集合中的所有成员
+# 返回值：集合中的所有成员。当集合 key 不存在时，返回空列表
 smembers key
 
-# 将 member 元素从 source 集合移动到 destination 集合。
+# 移除并返回集合中的一个或多个随机元素
+# 返回值：被移除的随机元素。 当集合不存在或是空集时，返回 nil
+spop key [count]
+
+# 移除集合中一个或多个成员，不存在的成员元素会被忽略
+# 返回值：被成功移除的元素的数量，不包括被忽略的元素
+srem key member [member...]
+
+# 返回第一个集合与其他集合之间的差异，也可以认为说第一个集合中独有的元素。不存在的集合 key 将视为空集
+# 返回值：包含差集成员的列表
+sdiff key [key...]
+
+# 将给定集合之间的差集存储在指定的集合中。如果指定的集合 key 已存在，则会被覆盖
+# 返回值：结果集中的元素数量
+sdiffstore destination key [key...]
+
+# 返回给定所有集合的交集
+# 返回值：交集成员的列表
+sinter key [key...]
+
+# 返回给定所有集合的交集并存储在 destination 中。如果指定的集合 key 已存在，则会被覆盖
+# 返回值：结果集中的元素数量
+sinterstore destination key [key...]
+
+# 返回所有给定集合的并集
+# 返回值：并集成员的列表
+sunion key [key...]
+
+# 所有给定集合的并集存储在 destination 集合中。如果指定的集合 key 已存在，则会被覆盖
+# 返回值：结果集中的元素数量
+sunionstore destination key [key...]
+
+# 判断 member 元素是否是集合 key 的成员
+# 返回值：如果成员元素是集合的成员，返回 1。如果成员元素不是集合的成员，或 key 不存在，返回 0
+sismember key member
+
+# 将 member 元素从 source 集合移动到 destination 集合。如果 source 集合不存在或不包含指定的 member 元素，则 SMOVE 命令不执行任何操作。当 destination 集合已经包含 member 元素时， SMOVE 命令只是简单地将 source 集合中的 member 元素删除。
+# 返回值：如果成员元素被成功移除，返回 1。如果 member 不是 source 集合的成员，并且没有任何操作对 destination 集合执行，那么返回 0
 smove source destination member
 
-# 移除并返回集合中的一个随机元素。
-spop key
-
-# 返回集合中一个或多个随机数。
+# 返回集合中count个随机数
+# count > 0，返回一个包含 count 个元素的数组，数组中的元素各不相同。如果 count 大于等于集合基数，那么返回整个集合
+# count < 0，返回一个长度为-count的数组，数组中的元素可能会重复出现多次
+# 返回值：只提供集合 key 参数时，返回一个元素；如果集合为空，返回 nil。如果提供了 count 参数，那么返回一个数组；如果集合为空，返回空数组
 srandmember key [count]
-
-# 移除集合中一个或多个成员。
-srem key member1 [member2]
-
-# 返回所有给定集合的并集。
-sunion key1 [key2]
-
-# 所有给定集合的并集存储在 destination 集合中。
-sunionstore destination key1 [key2]
-
-# 迭代集合中的元素。
-sscan key cursor [match pattern] [count count]
 ```
 
+#### 有序集合（sorted set）
 
+Redis 有序集合和集合一样也是 string 类型元素的集合,且不允许重复的成员
+
+不同的是每个元素都会关联一个 double 类型的分数。redis 正是通过分数来为集合中的成员进行从小到大的排序
+
+有序集合的成员是唯一的,但分数(score)却可以重复
+
+集合是通过哈希表实现的，所以添加，删除，查找的复杂度都是 O(1)。 集合中最大的成员数为 2^32 - 1 (4294967295, 每个集合可存储40多亿个成员)
+
+```bash
+# 向有序集合添加一个或多个成员，或者更新已存在成员的分数。分数值可以是整数值或双精度浮点数
+# 返回值：被成功添加的新成员的数量，不包括那些被更新的、已经存在的成员
+zadd key score member [score member ...]
+
+# 获取有序集合的成员数
+# 返回值：有序集合的成员的数目。当 key 不存在时，返回 0
+zcard key
+
+# 返回有序集中，成员的分数值
+# 返回值：成员的分数值。如果成员元素不是有序集 key 的成员，或 key 不存在，返回 nil 
+zscore key member
+
+# 计算在有序集合中指定分数区间的成员数，包括 min, max
+# 返回值：分数值在 min 和 max 之间的成员的数量
+zcount key min max
+
+# 在有序集合中计算指定字典区间内成员数量
+# 返回值：指定区间内的成员数量
+zlexcount key min max
+
+# 通过索引区间返回有序集合指定区间内的成员，其中成员的位置按分数值递增(从小到大)来排序
+# 返回值：指定区间内，带有分数值(可选)的有序集成员的列表
+zrange key start stop [withscores]
+
+# 返回有序集中指定区间内的成员，通过索引，分数从高到低
+# 返回值：指定区间内，带有分数值(可选)的有序集成员的列表
+zrevrange key start stop [withscores]
+
+# 通过字典区间返回有序集合的成员
+# LIMIT offset count：可选参数，用于限制返回结果的数量。offset 表示跳过前面多少个元素，count 表示返回多少个元素
+# 返回值：指定区间内的元素列表
+zrangebylex key min max [limit offset count]
+
+# 通过分数返回有序集合指定区间内的成员
+# 返回值：指定区间内，带有分数值(可选)的有序集成员的列表
+zrangebyscore key min max [withscores] [limit offset count]
+
+# 返回有序集中指定分数区间内的成员，分数从高到低排序
+# 返回值：指定区间内，带有分数值(可选)的有序集成员的列表
+zrevrangebyscore key max min [withscores] [limit offset count]
+
+# 返回有序集合中指定成员的排名
+# 返回值：如果成员是有序集 key 的成员，返回 member 的排名。如果成员不是有序集 key 的成员，返回 nil
+zrank key member
+
+# 返回有序集合中指定成员的排名，有序集成员按分数值递减(从大到小)排序
+# 返回值：如果成员是有序集 key 的成员，返回 member 的排名。如果成员不是有序集 key 的成员，返回 nil
+zrevrank key member
+
+# 移除有序集合中的一个或多个成员，不存在的成员将被忽略
+# 返回值：被成功移除的成员的数量，不包括被忽略的成员
+zrem key member [member ...]
+
+# 移除有序集合中给定的字典区间的所有成员
+# 返回值：被成功移除的成员的数量，不包括被忽略的成员
+zremrangebylex key min max
+
+# 移除有序集合中给定的排名区间的所有成员
+# 返回值：被移除成员的数量
+zremrangebyrank key start stop
+
+# 移除有序集合中给定的分数区间的所有成员
+# 返回值：被移除成员的数量
+zremrangebyscore key min max
+
+# 有序集合中对指定成员的分数加上增量 increment。当 key 不存在，或分数不是 key 的成员时， ZINCRBY key increment member 等同于 ZADD key increment member
+# 返回值：member 成员的新分数值
+zincrby key increment member
+
+# 计算给定的一个或多个有序集的交集并将结果集存储在新的有序集合 destination 中。默认情况下，结果集中某个成员的分数值是所有给定集下该成员分数值之和
+# numkeys：要计算交集的有序集合的数量
+# WEIGHTS weight [weight ...]：指定每个有序集合的权重。默认权重为 1
+# AGGREGATE sum|min|max：指定交集结果的聚合方式。默认是 sum（求和）
+# 返回值：保存到目标结果集的的成员数量
+zinterstore destination numkeys key [key ...] [WEIGHTS weight] [AGGREGATE SUM|MIN|MAX]
+
+# 计算给定的一个或多个有序集的并集，并存储在新的 key 中
+# 返回值：保存到目标结果集的的成员数量
+zunionstore destination numkeys key [key ...] [WEIGHTS weight] [AGGREGATE SUM|MIN|MAX]
+```
 
