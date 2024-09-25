@@ -467,3 +467,215 @@ zinterstore destination numkeys key [key ...] [WEIGHTS weight] [AGGREGATE SUM|MI
 zunionstore destination numkeys key [key ...] [WEIGHTS weight] [AGGREGATE SUM|MIN|MAX]
 ```
 
+#### HyperLogLog
+
+Redis 的 HyperLogLog 是一种用于估算不重复元素数量的数据结构。它特别适合处理大规模数据集，因为它在内存使用上非常高效
+
+-   内存效率：HyperLogLog 使用固定大小的内存（通常为 12 KB），即使在处理数亿个不重复元素时也能保持相对较小的内存占用。
+
+-   近似计数：HyperLogLog 通过 probabilistic algorithms（概率算法）来估算不同元素的数量，因此返回的结果是近似值，而不是精确值。通常，误差在 1% 左右。
+
+-   性能：插入和查询操作都非常快，插入操作的时间复杂度为 O(1
+
+但是，因为 HyperLogLog 只会根据输入元素来计算基数，而不会储存输入元素本身，所以 HyperLogLog 不能像集合那样，返回输入的各个元素
+
+```bash
+# 添加指定元素到 HyperLogLog 中，已输入的元素将被忽略
+# 返回值：如果至少有个元素被添加返回 1， 否则返回 0
+pfadd key element [element ...]
+
+# 返回给定 HyperLogLog 的基数估算值，基数指不重复元素
+# 返回值：给定 HyperLogLog 的基数值，如果多个 HyperLogLog 则返回基数估值之和，且基数是不重复的
+pfcount key [key ...]
+
+# 将多个 HyperLogLog 合并为一个 HyperLogLog
+# 返回值：OK
+pfmerge destkey sourcekey [sourcekey ...]
+```
+
+#### 发布订阅
+
+Redis 发布订阅 (pub/sub) 是一种消息通信模式：发送者 (pub) 发送消息，订阅者 (sub) 接收消息。
+
+Redis 客户端可以订阅任意数量的频道。
+
+下图展示了频道 channel1 ， 以及订阅这个频道的三个客户端 —— client2 、 client5 和 client1 之间的关系：
+
+![img](./assets/pubsub1.png)
+
+当有新消息通过 PUBLISH 命令发送给频道 channel1 时， 这个消息就会被发送给订阅它的三个客户端：
+
+![img](./assets/pubsub2.png)
+
+```bash
+# 订阅给定的一个或多个频道的信息，阻塞等待信息
+# 返回值：每次接收信息都返回三个值，分别是信息类型，频道，信息
+subscribe channel [channel ...]
+
+# 订阅一个或多个符合给定模式的频道
+# 返回值：每次接收信息都返回三个值，分别是信息类型，频道，信息
+psubscribe pattern [pattern ...]
+
+# 将信息发送到指定的频道
+# 返回值：接收到信息的订阅者数量
+publish channel message
+
+# 指退订给定的频道，但使用 crtl+c 退出订阅模式，unsubscribe 对于 redis-cli 来说没有实际意义
+unsubscribe [channel [channel ...]]
+
+# 退订所有给定模式的频道，punsubscribe 对于 redis-cli 来说没有实际意义
+punsubscribe [pattern [pattern ...]]
+
+# 查看订阅与发布系统状态，需要查看对应文档来编写subcommand
+# 返回值：对应命令的返回结果
+# pubsub channels获取所有活跃频道，即被监听的频道
+pubsub subcommand [argument [argument ...]]
+```
+
+#### 事务
+
+Redis 事务可以一次执行多个命令， 并且带有以下三个重要的保证：
+
+-   批量操作在发送 EXEC 命令前被放入队列缓存
+-   收到 EXEC 命令后进入事务执行，事务中任意命令执行失败，其余的命令依然被执行
+-   在事务执行过程，其他客户端提交的命令请求不会插入到事务执行命令序列中
+
+一个事务从开始到执行会经历以下三个阶段：
+
+-   开始事务
+-   命令入队
+-   执行事务
+
+单个 Redis 命令的执行是原子性的，但 Redis 没有在事务上增加任何维持原子性的机制，所以 Redis 事务的执行并不是原子性的
+
+事务可以理解为一个打包的批量执行脚本，但批量指令并非原子化的操作，中间某条指令的失败不会导致前面已做指令的回滚，也不会造成后续的指令不做
+
+```bash
+# 标记一个事务块的开始，直到键入exec之前不能重复使用 multi
+# 返回值：OK
+multi
+
+# 执行所有事务块内的命令
+# 返回值：事务块内所有命令的返回值，按命令执行的先后顺序排列。 当操作被打断时，返回空值 nil
+exec
+
+# 取消事务，放弃执行事务块内的所有命令，退出 multi，在 exec 执行之前
+# 返回值：OK
+discard
+
+# 监视一个(或多个) key ，如果在事务执行之前这个(或这些) key 被其他命令（非事务中的命令）所改动，那么事务将被打断。使用 WATCH 监视了一个带过期时间的键，那么即使这个键过期了，事务仍然可以正常执行。watch 在 multi 之前执行
+# 返回值：OK
+watch key [key ...]
+
+# 取消 watch 命令对所有 key 的监视
+# 返回值：OK
+unwatch
+```
+
+#### 脚本
+
+Redis 脚本使用 Lua 解释器来执行脚本。 Redis 2.6 版本通过内嵌支持 Lua 环境
+
+```bash
+# 执行 Lua 脚本
+# script： 参数是一段 Lua 5.1 脚本程序。脚本不必(也不应该)定义为一个 Lua 函数
+# numkeys： 用于指定键名参数的个数
+# key [key ...]： 从 EVAL 的第三个参数开始算起，表示在脚本中所用到的那些 Redis 键(key)，这些键名参数可以在 Lua 中通过全局变量 KEYS 数组，用 1 为基址的形式访问( KEYS[1] ， KEYS[2] ，以此类推)
+# arg [arg ...]： 附加参数，在 Lua 中通过全局变量 ARGV 数组访问，访问的形式和 KEYS 变量类似( ARGV[1] 、 ARGV[2] ，诸如此类)
+# e.g.：EVAL "return {redis.call('GET', KEYS[1]), redis.call('GET', KEYS[2]), ARGV[1], ARGV[2], ARGV[3]}" 2 name name1 arg1 arg2 arg3
+# 返回值：脚本命令执行后返回结果
+eval script numkeys key [key ...] arg [arg ...]
+
+# 将脚本添加到脚本缓存中，但不立即执行该脚本。EVAL 命令也会将脚本添加到脚本缓存中，但是它会立即对输入的脚本进行求值。如果给定的脚本已经在缓存里面了，那么不执行任何操作
+# 返回值：给定脚本的 SHA1 校验和
+script load script
+
+# 根据给定的 sha1 校验码，执行缓存在服务器中的脚本
+# sha1 ： 通过 SCRIPT LOAD 生成的 sha1 校验码
+# 返回值：脚本命令执行后返回结果
+evalsha sha1 numkeys key [key ...] arg [arg ...]
+
+# 查看指定的脚本是否已经被保存在缓存当中
+# 返回值：一个列表，包含 0 和 1，前者表示脚本不存在于缓存，后者表示脚本已经在缓存里面了
+script exists sha1 [sha1 ...]
+
+# 从脚本缓存中移除所有脚本
+# 返回值：OK
+script flush
+
+# 用于杀死当前正在运行的 Lua 脚本，当且仅当这个脚本没有执行过任何写操作时，这个命令才生效
+# 返回值：OK
+script kill
+```
+
+#### 连接
+
+```bash
+# 用于检测给定的密码和配置文件中的密码是否相符
+# 返回值：密码匹配时返回 OK ，否则返回一个错误
+auth [username] password
+
+# 打印字符串
+# 返回值：字符串本身
+echo message
+
+# 查看服务是否运行
+# 返回值：如果连接正常就返回一个 PONG ，否则返回一个连接错误
+ping
+
+# 关闭当前连接
+quit
+
+# 切换到指定的数据库，数据库索引号 index 用数字值指定，以 0 作为起始索引值。默认使用 0 号数据库
+# 返回值：OK
+select index
+```
+
+#### 数据备份与恢复
+
+```bash
+# 创建当前数据库的备份，将在 redis 安装目录中创建dump.rdb文件
+save
+
+# 该命令在后台执行
+bgsave
+
+# 获取 redis 目录
+# 如果需要恢复数据，只需将备份文件 (dump.rdb) 移动到 redis 安装目录并启动服务即可
+config get dir
+```
+
+#### 安全
+
+```bash
+# 获取 config 中的 requirepass 参数
+config get requirepass
+
+# 设置 requirepass，客户端连接到 redis 服务的服务
+config set requirepass password
+```
+
+#### 性能测试
+
+```bash
+# 该命令是在 redis 的目录下执行的，而不是 redis 客户端的内部指令
+redis-benchmark [option] [option value]
+
+-h		指定服务器主机名，默认为127.0.0.1
+-p		指定服务器端口，默认为6379
+-s		指定服务器 socket
+-c		指定并发连接数，默认为50
+-n		指定请求数，默认为10000
+-d		以字节的形式指定 SET/GET 值的数据大小，默认为2
+-k		1=keep alive，0=reconnect，默认为1
+-r		SET/GET/INCR 使用随机 key, SADD 使用随机值
+-P		通过管道传输 <numreq> 请求，默认为1
+-q		强制退出 redis，仅显示 query/sec 值
+--csv	以 CSV 格式输出
+-l		生成循环，永久执行测试
+-t		仅运行以逗号分隔的测试命令列表
+-I		Idle 模式，仅打开 N 个 idle 连接并等待
+
+redis-benchmark -n 10000  -q
+```
+
