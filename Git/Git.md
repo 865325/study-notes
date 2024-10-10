@@ -51,6 +51,11 @@ git branch <branch>		# 创建分支
 git branch -d <branch>	# 删除分支，-D强制删除
 git switch <branch>		# 切换分支，且HEAD指针指向相应分支
 git checkout <branch>	# 切换分支，且HEAD指针指向相应分支
+git branch -m main master # 重命名本地分支，main重命名为master
+
+# master 分支将会跟踪 origin/master 分支，这意味着在执行 git pull 或 git push 时，Git 会知道应该将更改推送到或从哪个远程分支获取更改
+git branch -u origin/master master
+
 ```
 
 #### 其他操作
@@ -63,6 +68,13 @@ git push origin HEAD:refs/for/master
 
 git pull [<remote> [<branch>]]	# 拉取远程仓库
 git pull --rebase	# 使用--rebase选项可以将远程分支的提交应用到你当前分支的顶部，而不是进行合并
+
+git fetch origin # 从远程仓库（这里是 origin）获取最新的更新（提交、分支等），但不会自动合并这些更新到当前分支
+
+# 用于设置远程仓库 origin 的默认分支（HEAD）
+# set-head 是用于设置 HEAD 引用的命令
+# -a 表示“自动”设置 HEAD。这将根据远程分支的情况自动确定 origin 的 HEAD 分支
+git remote set-head origin -a
 
 git commit --amend		#用于修改最近一次提交，修改的是上一次提交，而不是创建新的提交
 ```
