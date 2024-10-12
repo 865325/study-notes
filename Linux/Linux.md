@@ -1626,3 +1626,188 @@ char *getenv(const char *name);
 // getenv("HOME")
 ```
 
+### iptables原理
+
+#### netfilter与iptables
+
+Netfilter是由Rusty Russell提出的Linux 2.4内核防火墙框架，也是Linux操作系统核心层内部的一个数据包处理模块，它具有如下功能：
+
+-   网络地址转换(Network Address Translate)
+-   数据包内容修改
+-   数据包过滤防火墙
+
+Netfilter 平台中制定了数据包的五个挂载点（Hook Point，我们可以理解为回调函数点，数据包到达这些位置的时候会主动调用我们的函数，使我们有机会能在数据包路由的时候改变它们的方向、内容），这5个挂载点分别是`PRE_ROUTING`、`INPUT`、`OUTPUT`、`FORWARD`、`POST_ROUTING`
+
+![image-20241012111628734](./assets/image-20241012111628734.png)
+
+Netfilter 所设置的规则是存放在内核内存中的，而 iptables 是一个应用层的应用程序，它通过 Netfilter 放出的接口来对存放在内核内存中的 XXtables（Netfilter的配置表）进行修改。这个XXtables由表`tables`、链`chains`、规则`rules`组成，iptables在应用层负责修改这个规则文件。类似的应用程序还有 firewalld
+
+#### 四表五链
+
+netfilter的配置表有四种，分别是filter表，nat表，mangle表和raw表
+
+-   filter表：主要用于对数据包进行过滤，根据具体的规则决定是否放行该数据包（如DROP、ACCEPT、REJECT、LOG）
+-   nat表：进行网络地址转换
+-   mangle表：主要用于修改数据包的TOS（Type Of Service，服务类型）、TTL（Time To Live，生存周期）、为数据包设置Mark标记以实现Qos(Quality Of Service，服务质量)调整，以及策略路由等应用，由于需要相应的路由设备支持，因此应用并不广泛
+-   raw表：用于决定数据包是否被状态跟踪机制处理。在匹配数据包时，raw表的规则要优先于其他表
+
+四张表包含的规则链如图所示：
+
+![img](./assets/1206313-20170725210416841-1121085078.png)
+
+netfilter的五条规则链：
+
+-   INPUT链：当接收到防火墙本机地址的数据包（入站）时，应用此链中的规则
+
+-   OUTPUT链：当防火墙本机向外发送数据包（出站）时，应用此链中的规则
+
+-   FORWARD链：当接收到需要通过防火墙发送给其他地址的数据包（转发）时，应用此链中的规则
+
+-   PREROUTING链：在对数据包作路由选择之前，应用此链中的规则，如DNAT
+
+-   POSTROUTING链：在对数据包作路由选择之后，应用此链中的规则，如SNAT
+
+![img](./assets/1206313-20170725210407091-1596383893.png)
+
+其中中INPUT、OUTPUT链更多的应用在“主机防火墙”中，即主要针对服务器本机进出数据的安全控制；而FORWARD、PREROUTING、POSTROUTING链更多的应用在“网络防火墙”中，特别是防火墙服务器作为网关使用时的情况
+
+#### 数据包路由
+
+网口数据包由底层的网卡NIC接收，通过数据链路层的解包之后(去除数据链路帧头)，就进入了TCP/IP协议栈(本质就是一个处理网络数据包的内核驱动)和Netfilter混合的数据包处理流程中了。数据包的接收、处理、转发流程构成一个有限状态向量机，经过一些列的内核处理函数、以及Netfilter Hook点，最后被转发、或者本次上层的应用程序消化掉
+
+![img](./assets/1206313-20170725211002763-1630915226.png)
+
+从上图中，我们可以总结出以下规律：
+
+-   当一个数据包进入网卡时，数据包首先进入**PREROUTING链**，在PREROUTING链中我们有机会修改数据包的DestIP(目的IP)，然后内核的"路由模块"根据"数据包目的IP"以及"内核中的路由表"判断是否需要转发出去(注意，这个时候数据包的DestIP有可能已经被我们修改过了)
+-   如果数据包就是进入本机的(即数据包的目的IP是本机的网口IP)，数据包就会沿着图向下移动，到达**INPUT链**。数据包到达INPUT链后，任何进程都会-收到它
+-   本机上运行的程序也可以发送数据包，这些数据包经过**OUTPUT链，**然后到达**POSTROTING链输出**(注意，这个时候数据包的SrcIP有可能已经被我们修改过了)
+-   如果数据包是要转发出去的(即目的IP地址不在当前子网中)，且内核允许转发，数据包就会向右移动，经过**FORWARD链**，然后到达**POSTROUTING链输出**(选择对应子网的网口发送出去)
+
+#### iptables编写规则
+
+命令格式 `iptables [-t 表名] command [链名] [参数] [-j 动作]`
+
+![img](./assets/1206313-20170725211423638-499973384.png)
+
+```bash
+[-t 表名] # 该规则所操作的哪个表，可以使用filter、nat等，如果没有指定则默认为filter
+command:
+	-A chain            # 将规则追加到指定链的末尾
+    -C chain            # 检查规则是否存在于指定链中
+    -D chain            # 从指定链中删除匹配的规则
+    -D chain rulenum    # 删除指定链中编号为 rulenum 的规则（1 = 第一条）
+    -I chain [rulenum]  # 在指定链的指定位置插入规则（默认是1，即第一条）
+    -R chain rulenum    # 替换指定链中的第 rulenum 条规则
+    -L [chain [rulenum]]# 列出指定链或所有链中的规则
+    -S [chain [rulenum]]# 打印指定链或所有链中的规则
+    -F [chain]          # 删除指定链或所有链中的所有规则
+    -Z [chain [rulenum]]# 将指定链或所有链的计数器归零
+parameter:
+	-i|o 网卡名称		  # i是指定数据包从哪块网卡进入，o是指定数据包从哪块网卡输出
+	-p 	 协议类型		  # 可以指定规则应用的协议，包含tcp、udp和icmp等
+	-s 	 源IP地址		   # 源主机的IP地址或子网地址
+	-d	 目标IP地址		  # 目标主机的IP地址或子网地址
+target:
+	ACCEPT				# 允许数据包通过
+	DROP				# 直接丢弃数据包，不给任何回应信息
+	REJECT				# 拒绝数据包通过，必要时会给数据发送端一个响应的信息。
+	SNAT				# 源地址转换
+	DNAT				# 目标地址转换
+```
+
+
+
+### 网桥
+
+Linux 的网桥是一种虚拟设备（使用软件实现），可以将 Linux 内部多个网络接口连接起来，如下图所示：
+
+![image-20241012103123470](./assets/image-20241012103123470.png)
+
+而将网络接口连接起来的结果就是，一个网络接口接收到网络数据包后，会复制到其他网络接口中，如下图所示：
+
+![image-20241012103200476](./assets/image-20241012103200476.png)
+
+如上图所示，当网络接口A接收到数据包后，`网桥` 会将数据包复制并且发送给连接到 `网桥` 的其他网络接口（如上图中的网卡B和网卡C）
+
+#### brctl用法
+
+```bash
+Usage: brctl [commands]
+commands:
+        # 添加一个新的桥接接口
+        # 示例: brctl addbr br0 创建名为 br0 的桥接接口
+        addbr           <bridge>                
+        
+        # 删除指定的桥接接口
+        # 示例: brctl delbr br0 删除名为 br0 的桥接接口
+        delbr           <bridge>                
+
+        # 将指定的网络接口添加到桥接接口中
+        # 示例: brctl addif br0 eth0 将 eth0 添加到 br0 桥接接口
+        addif           <bridge> <device>       
+
+        # 从桥接接口中删除指定的网络接口
+        # 示例: brctl delif br0 eth0 将 eth0 从 br0 桥接接口移除
+        delif           <bridge> <device>       
+
+        # 启用或禁用“发夹”模式
+        # 示例: brctl hairpin br0 1 on 在 br0 的端口 1 上启用发夹模式
+        hairpin         <bridge> <port> {on|off} 
+
+        # 设置桥接接口的老化时间
+        # 示例: brctl setageing br0 300 设置 br0 的老化时间为 300 秒
+        setageing       <bridge> <time>         
+
+        # 设置桥接接口的优先级
+        # 示例: brctl setbridgeprio br0 32768 设置 br0 的优先级为 32768
+        setbridgeprio   <bridge> <prio>         
+
+        # 设置桥接的转发延迟时间
+        # 示例: brctl setfd br0 15 设置 br0 的转发延迟为 15 秒
+        setfd           <bridge> <time>         
+
+        # 设置桥接的 hello 时间
+        # 示例: brctl sethello br0 2 设置 br0 的 hello 时间为 2 秒
+        sethello        <bridge> <time>         
+
+        # 设置桥接接口的最大消息年龄
+        # 示例: brctl setmaxage br0 20 设置 br0 的最大消息年龄为 20 秒
+        setmaxage       <bridge> <time>         
+
+        # 设置指定端口的路径成本值
+        # 示例: brctl setpathcost br0 1 100 设置 br0 的端口 1 的路径成本为 100
+        setpathcost     <bridge> <port> <cost>  
+
+        # 设置指定端口的优先级
+        # 示例: brctl setportprio br0 1 128 设置 br0 的端口 1 的优先级为 128
+        setportprio     <bridge> <port> <prio>  
+
+        # 显示系统中所有桥接接口的列表
+        # 示例: brctl show 列出所有桥接接口
+        show            [ <bridge> ]            
+
+        # 显示指定桥接接口的 MAC 地址列表
+        # 示例: brctl showmacs br0 显示 br0 的 MAC 地址
+        showmacs        <bridge>                
+
+        # 显示指定桥接接口的生成树协议（STP）信息
+        # 示例: brctl showstp br0 显示 br0 的 STP 配置信息
+        showstp         <bridge>                
+
+        # 启用或禁用指定桥接接口的生成树协议
+        # 示例: brctl stp br0 on 在 br0 上启用 STP
+        stp             <bridge> {on|off}       
+```
+
+```bash
+brctl show	# 显示系统中所有桥接接口的列表
+
+# bridge name（桥接名称）
+# bridge id（桥接 ID）：前两位 80 表示协议类型（IEEE 802），后面的部分是桥接设备的 MAC 地址
+# STP enabled（STP 启用状态）：生成树协议（Spanning Tree Protocol, STP）
+# interfaces（接口）：列出了与该桥接关联的网络接口
+bridge name     bridge id               STP enabled     interfaces
+br0             8000.428a81d90e59       no
+```
+
