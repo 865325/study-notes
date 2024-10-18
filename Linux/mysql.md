@@ -13,6 +13,14 @@ systemctl status mysql
 # -u root：-u表示指定要登录的用户名，root是你要使用的MySQL用户名。在这里你选择用MySQL的root用户登录数据库
 # -p：告诉MySQL客户端在连接时提示你输入密码。执行该命令后，终端会提示你输入root用户的密码
 sudo mysql -u root -p
+
+# 远程访问设置
+sudo vi /etc/my.cnf
+# 往其中添加
+[mysqld]
+bind-address = 0.0.0.0
+# 重启mysql
+sudo systemctl restart mysql
 ```
 
 #### 常用指令
