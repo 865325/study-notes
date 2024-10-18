@@ -1,3 +1,5 @@
+### Shell概念
+
 #### Shell解释器
 
 ```shell
@@ -863,5 +865,47 @@ var=123
 source ./test1.sh
 
 echo "var=${var}"
+```
+
+### Shell实操
+
+```sh
+#!/bin/bash
+
+# 一个简单的脚本，接受两个参数并打印它们
+print_args() {
+	local first_arg=$1 # 直接使用 $1 和 $2 来获取参数值
+	local second_arg="$2"
+
+	echo "Function: $0"	# $0 函数名
+	echo "First argument: $first_arg"
+	echo "Second argument: $second_arg"
+}
+
+# 调用函数，传入两个参数
+print_args "Hello World" "Goodbye World"
+
+append() {
+	local var="$1"
+	local value="$2"
+	# ${parameter:-word}，参数扩展语法，指定parameter未提供时的默认值
+	# $3 未提供，默认未空格
+	local sep="${3:- }"
+	
+	# eval [arguments]，将一个字符串 arguments 解释为命令并执行
+	# 可用于 变量赋值给变量  eval "var='$value'"
+	# export 命令用于将一个变量导出为环境变量，使其在当前 shell 会话和子进程中可用
+	# -- 是一个选项标识符，告诉 export 后面没有选项。这样做可以防止后续参数被误认为是选项
+	# :+... 是条件扩展，当前面的变量已经被定义且非空时，则执行...的内容，否则返回空
+	eval "export -- \"$var=\${$var:+\${$var}\${value:+\$sep}}\$value\""
+}
+
+# 调用 append 函数
+my_variable="Hello"           # 定义一个初始变量
+echo "Before append: $my_variable"  # 输出: Hello
+
+append my_variable "World" ", "  # 追加 World，使用分隔符 ', '
+
+echo "After append: $my_variable"   # 输出: Hello, World
 ```
 
