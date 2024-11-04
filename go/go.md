@@ -947,3 +947,286 @@ func main() {
 */
 ```
 
+#### 解析 json 数据
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type MobileInfo struct {
+	Resultcode string `json:"resultcode"`
+	Reason     string `json:"reason"`
+	Result     struct {
+		Province string `json:"province"`
+		City     string `json:"city"`
+		Areacode string `json:"areacode"`
+		Zip      string `json:"zip"`
+		Company  string `json:"company"`
+		Card     string `json:"card"`
+	} `json:"result"`
+}
+
+func main() {
+	jsonStr := `
+		{
+			"resultcode": "200",
+			"reason": "Return Successd!",
+			"result": {
+				"province": "浙江",
+				"city": "杭州",
+				"areacode": "0571",
+				"zip": "310000",
+				"company": "中国移动",
+				"card": ""
+			}
+		}
+	`
+
+	var mobile MobileInfo
+	err := json.Unmarshal([]byte(jsonStr), &mobile)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println(mobile.Resultcode)
+	fmt.Println(mobile.Reason)
+	fmt.Println(mobile.Result.City)
+}
+```
+
+json 格式的数据类型不确定
+
+或者 json 格式的数据 result 中参数不固定
+
+使用开源库 https://github.com/mitchellh/mapstructure
+
+```go
+// 数据类型不确定
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/mitchellh/mapstructure"
+)
+
+type MobileInfo struct {
+	Resultcode string `json:"resultcode"`
+}
+
+func main() {
+	jsonStr := `
+		{
+			"resultcode": 200
+		}
+	`
+
+	var result map[string]interface{}
+	err := json.Unmarshal([]byte(jsonStr), &result)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	var mobile MobileInfo
+	err = mapstructure.WeakDecode(result, &mobile)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	fmt.Println(mobile.Resultcode)
+}
+```
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/mitchellh/mapstructure"
+)
+
+type Family struct {
+	LastName string
+}
+type Location struct {
+	City string
+}
+type Person struct {
+	// 用于控制在将 map（通常是 JSON、YAML 等格式的反序列化）转换为 Person 结构体时的行为
+	// squash 意味着 Family 中的字段会被“压缩”到 Person 结构体的顶层
+	// 意味着可以直接访问 LastName字段，而不需要通过 Family.LastName 来访问
+	Family    `mapstructure:",squash"`
+	Location  `mapstructure:",squash"`
+	FirstName string
+}
+
+func main() {
+	input := map[string]interface{}{
+		"FirstName": "Mitchell",
+		"LastName":  "Hashimoto",
+		"City":      "San Francisco",
+	}
+
+	var result Person
+	err := mapstructure.Decode(input, &result)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(result.FirstName)
+	fmt.Println(result.LastName)
+	fmt.Println(result.City)
+}
+```
+
+#### 分文件编写
+
+```go
+// study.go
+package demo
+
+import "github.com/pkg/errors"
+
+// 断言 study 类型实现了 Study 接口。
+// 这个声明没有实际的代码逻辑，主要用于编译时检查。
+// 如果 study 没有实现 Study 接口，编译时会报错
+var _ Study = (*study)(nil)
+
+// 定义一个接口 Study，声明了四个方法
+// 这些方法的参数是字符串类型 msg，返回值也是字符串
+// 这个接口规定了所有符合该接口的类型必须实现这些方法
+type Study interface {
+	Listen(msg string) string
+	Speak(msg string) string
+	Read(msg string) string
+	Write(msg string) string
+}
+
+// 定义一个结构体 study，它将实现 Study 接口
+type study struct {
+	Name string
+}
+
+// 实现 Study 接口的 Listen 方法
+func (s *study) Listen(msg string) string {
+	return s.Name + " 听 " + msg
+}
+
+// 实现 Study 接口的 Speak 方法
+func (s *study) Speak(msg string) string {
+	return s.Name + " 说 " + msg
+}
+
+// 实现 Study 接口的 Read 方法
+func (s *study) Read(msg string) string {
+	return s.Name + " 读 " + msg
+}
+
+// 实现 Study 接口的 Write 方法
+func (s *study) Write(msg string) string {
+	return s.Name + " 写 " + msg
+}
+
+// New 函数用于创建一个新的 Study 类型实例
+func New(name string) (Study, error) {
+	if name == "" {
+		return nil, errors.New("name required")
+	}
+
+	// 返回一个新的 study 实例，Name 字段设置为传入的 name
+	return &study{
+		Name: name,
+	}, nil
+}
+```
+
+```go
+// main.go
+package main
+
+import (
+	"fmt"
+	"go-hello/demo"
+)
+
+func main() {
+	name := "Tom"
+	s, err := demo.New(name)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(s.Listen("english"))
+	fmt.Println(s.Speak("english"))
+	fmt.Println(s.Read("english"))
+	fmt.Println(s.Write("english"))
+}
+```
+
+```go
+// go.mod
+module go-hello
+
+go 1.23.2
+
+require github.com/pkg/errors v0.9.1
+```
+
+```bash
+doraemon@doraemon-virtual-machine:~/Code/go$ tree
+.
+├── demo
+│   └── study.go
+├── go.mod
+├── go.sum
+└── main.go
+```
+
+#### 不定参数
+
+```go
+package main
+
+import (
+	"fmt"
+)
+
+func Add(a int, args ...int) (result int) {
+	result += a
+	for _, arg := range args {
+		result += arg
+	}
+	return
+}
+
+func main() {
+	fmt.Println(Add(1, 2, 3, 4))
+}
+```
+
+#### 时间格式化
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+
+
+func main() {
+	RFC3339Str := "2020-11-08T08:18:46+08:00"
+	ts, _ := time.Parse(time.RFC3339, RFC3339Str)
+
+	// Go 语言格式化时间模板不是常见的 Y-m-d H:i:s，而是 2006-01-02 15:04:05
+	ats := ts.Format("2006-01-02 15:04:05")
+
+	fmt.Println(ats)
+}
+```
+
