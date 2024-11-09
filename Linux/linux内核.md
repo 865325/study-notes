@@ -498,70 +498,23 @@ frame_finish:
 ```
 
 ```c
+// /net/bridge/br_input.c
 int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
     // 根据网桥设备获取对应的端口
 	struct net_bridge_port *p = br_port_get_rcu(skb->dev);
-	enum br_pkt_type pkt_type = BR_PKT_UNICAST;
-	struct net_bridge_fdb_entry *dst = NULL;
-	struct net_bridge_mdb_entry *mdst;
-	bool local_rcv, mcast_hit = false;
-	struct net_bridge *br;
-	u16 vid = 0;
-	u8 state;
-	
-    // 如果端口不存在 或者 当前端口状态为 disabled
-	if (!p || p->state == BR_STATE_DISABLED)
-		goto drop;
 
-	state = p->state;
-	if (!br_allowed_ingress(p->br, nbp_vlan_group_rcu(p), skb, &vid,
-				&state))
-		goto out;
-
-	nbp_switchdev_frame_mark(p, skb);
+    ...
 
 	/* insert into forwarding database after filtering to avoid spoofing */
+    // 更新转发表
 	br = p->br;
 	if (p->flags & BR_LEARNING)
 		br_fdb_update(br, p, eth_hdr(skb)->h_source, vid, 0);
 
-	local_rcv = !!(br->dev->flags & IFF_PROMISC);
-	if (is_multicast_ether_addr(eth_hdr(skb)->h_dest)) {
-		/* by definition the broadcast is also a multicast address */
-		if (is_broadcast_ether_addr(eth_hdr(skb)->h_dest)) {
-			pkt_type = BR_PKT_BROADCAST;
-			local_rcv = true;
-		} else {
-			pkt_type = BR_PKT_MULTICAST;
-			if (br_multicast_rcv(br, p, skb, vid))
-				goto drop;
-		}
-	}
+    ... 
 
-	if (state == BR_STATE_LEARNING)
-		goto drop;
-
-	BR_INPUT_SKB_CB(skb)->brdev = br->dev;
-	BR_INPUT_SKB_CB(skb)->src_port_isolated = !!(p->flags & BR_ISOLATED);
-
-	if (IS_ENABLED(CONFIG_INET) &&
-	    (skb->protocol == htons(ETH_P_ARP) ||
-	     skb->protocol == htons(ETH_P_RARP))) {
-		br_do_proxy_suppress_arp(skb, br, vid, p);
-	} else if (IS_ENABLED(CONFIG_IPV6) &&
-		   skb->protocol == htons(ETH_P_IPV6) &&
-		   br_opt_get(br, BROPT_NEIGH_SUPPRESS_ENABLED) &&
-		   pskb_may_pull(skb, sizeof(struct ipv6hdr) +
-				 sizeof(struct nd_msg)) &&
-		   ipv6_hdr(skb)->nexthdr == IPPROTO_ICMPV6) {
-			struct nd_msg *msg, _msg;
-
-			msg = br_is_nd_neigh_msg(skb, &_msg);
-			if (msg)
-				br_do_suppress_nd(skb, br, vid, p, msg);
-	}
-
+    // 根据数据包类型进行处理
 	switch (pkt_type) {
 	case BR_PKT_MULTICAST:
 		mdst = br_mdb_get(br, skb, vid);
@@ -578,12 +531,14 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 			DEV_STATS_INC(br->dev, multicast);
 		}
 		break;
+    // 查找转发表，单播数据包目标地址对应的 FDB 条目
 	case BR_PKT_UNICAST:
 		dst = br_fdb_find_rcu(br, eth_hdr(skb)->h_dest, vid);
 	default:
 		break;
 	}
 
+    // 如果找到了对应的转发数据库条目，进行数据包转发
 	if (dst) {
 		unsigned long now = jiffies;
 
@@ -592,16 +547,16 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 
 		if (now != dst->used)
 			dst->used = now;
+        // 转发数据包到目标地址
 		br_forward(dst->dst, skb, local_rcv, false);
 	} else {
+        // 如果没有找到目标条目，进行泛洪处理
 		if (!mcast_hit)
 			br_flood(br, skb, pkt_type, local_rcv, false);
 		else
 			br_multicast_flood(mdst, skb, local_rcv, false);
 	}
 
-	if (local_rcv)
-		return br_pass_frame_up(skb);
 
 out:
 	return 0;
@@ -610,4 +565,50 @@ drop:
 	goto out;
 }
 ```
+
+```c
+// /net/bridge/br_forward.c
+void br_forward(const struct net_bridge_port *to,
+		struct sk_buff *skb, bool local_rcv, bool local_orig)
+{
+    ... 判断 net_bridge_port 是否可用
+        
+    // 进行数据的实际转发
+	__br_forward(to, skb, local_orig);
+    
+    ...
+}
+
+static void __br_forward(const struct net_bridge_port *to,
+			 struct sk_buff *skb, bool local_orig)
+{
+	...
+    
+    // 设置数据包的新设备为目标端口的设备
+	skb->dev = to->dev;
+	...
+
+    // 将数据包传递给相应的 Netfilter 钩子进行进一步处理
+	NF_HOOK(NFPROTO_BRIDGE, br_hook,
+		net, NULL, skb, indev, skb->dev,
+		br_forward_finish);
+}
+
+int br_forward_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+	skb->tstamp = 0;
+	return NF_HOOK(NFPROTO_BRIDGE, NF_BR_POST_ROUTING,
+		       net, sk, skb, NULL, skb->dev,
+		       br_dev_queue_push_xmit);
+
+}
+
+int br_dev_queue_push_xmit(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+	// 将数据包提交给网络设备的发送队列
+	dev_queue_xmit(skb);
+}
+```
+
+
 
